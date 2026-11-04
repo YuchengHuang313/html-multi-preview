@@ -2,7 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import { TelemetryReporter, TelemetryEventMeasurements, TelemetryEventProperties } from '@vscode/extension-telemetry';
+import { TelemetryReporter, TelemetryEventMeasurements, TelemetryEventProperties } from '../../../utils/telemetry';
 import * as vscode from 'vscode';
 
 export class MockTelemetryReporter implements TelemetryReporter {

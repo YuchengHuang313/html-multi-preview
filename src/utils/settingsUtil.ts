@@ -54,7 +54,7 @@ export enum CustomExternalBrowser {
 /**
  * @description prefix for all extension contributions for Live Preview
  */
-export const SETTINGS_SECTION_ID = 'livePreview';
+export const SETTINGS_SECTION_ID = 'htmlMultiPreview';
 
 /**
  * @description contains the string constants for all settings (`SETTINGS_SECTION_ID`.`).
@@ -103,7 +103,7 @@ export class SettingUtil {
 			),
 			autoRefreshPreview: config.get<AutoRefreshPreview>(
 				Settings.autoRefreshPreview,
-				AutoRefreshPreview.onAnyChange
+				AutoRefreshPreview.never
 			),
 			openPreviewTarget: config.get<OpenPreviewTarget>(
 				Settings.openPreviewTarget,
@@ -162,7 +162,7 @@ export class SettingUtil {
 	}
 	/**
 	 * @description Update a Live Preview setting
-	 * @param {string} settingSuffix the suffix, `livePreview.<suffix>` of the setting to set.
+	 * @param {string} settingSuffix the suffix, `htmlMultiPreview.<suffix>` of the setting to set.
 	 * @param {T} value the value to set the setting to.
 	 * @param {vscode.ConfigurationTarget | boolean | null} scope settings scope
 	 * @param {vscode.Uri} uri uri to scope the settings to

@@ -205,6 +205,61 @@ describe('ServerGrouping', () => {
 			return getIndexHTML(serverGrouping.port);
 		});
 
+        async function requestReport(): Promise<string> {
+            return new Promise((resolve, reject) => {
+                http.get({host: '127.0.0.1', port: serverGrouping.port, path: '/index.html'}, res => {
+                    let body = '';
+                    res.on('data', chunk => { body += chunk; });
+                    res.on('end', () => resolve(body));
+                    res.on('error', reject);
+                }).on('error', reject);
+            });
+        }
+
+        it('serves current disk contents when an open report buffer is clean but stale', async () => {
+            const documents = sandbox.stub(vscode.workspace, 'textDocuments').value([{
+                fileName: 'c:/Users/TestUser/workspace1/test/index.html',
+                languageId: 'html', isUntitled: false, isDirty: false,
+                getText: () => '<html><body>Extracted: 99</body></html>',
+            }]);
+            try {
+                const body = await requestReport();
+                assert.ok(body.includes('file contents from c:/Users/TestUser/workspace1/test/index.html'));
+                assert.ok(!body.includes('Extracted: 99'));
+            } finally { documents.restore(); }
+        });
+
+        it('keeps unsaved editor changes visible in the preview', async () => {
+            const documents = sandbox.stub(vscode.workspace, 'textDocuments').value([{
+                fileName: 'c:/Users/TestUser/workspace1/test/index.html',
+                languageId: 'html', isUntitled: false, isDirty: true,
+                getText: () => '<html><body>Unsaved edits</body></html>',
+            }]);
+            try {
+                const body = await requestReport();
+                assert.ok(body.includes('Unsaved edits'));
+                assert.ok(!body.includes('file contents from'));
+            } finally { documents.restore(); }
+        });
+
+        it('reads each external report publication without reopening the editor', async () => {
+            const documents = sandbox.stub(vscode.workspace, 'textDocuments').value([{
+                fileName: 'c:/Users/TestUser/workspace1/test/index.html',
+                languageId: 'html', isUntitled: false, isDirty: false,
+                getText: () => '<html><body>Extracted: 99</body></html>',
+            }]);
+            const read = PathUtil.FileRead as sinon.SinonStub;
+            try {
+                read.callsFake(async () => Buffer.from('<html><body>Extracted: 211</body></html>'));
+                assert.ok((await requestReport()).includes('Extracted: 211'));
+                read.callsFake(async () => Buffer.from('<html><body>Extracted: 212</body></html>'));
+                assert.ok((await requestReport()).includes('Extracted: 212'));
+            } finally {
+                documents.restore();
+                read.callsFake(async file => `file contents from ${PathUtil.ConvertToPosixPath(file)}`);
+            }
+        });
+
 		it('should navigate to index.html when reaching index ', async () => {
 			return getDirWithIndexHTML(serverGrouping.port);
 		});
@@ -438,7 +493,7 @@ describe('ServerGrouping', () => {
 	describe("Check that previewing will also open server", () => {
 		let serverGrouping: ServerGrouping;
 		let connection: Connection;
-		before(async () => {
+		beforeEach(async () => {
 			await init();
 			const connectionManager = new ConnectionManager();
 			connection = await connectionManager.createAndAddNewConnection(testWorkspaces[0]);
@@ -455,7 +510,7 @@ describe('ServerGrouping', () => {
 			);
 		});
 
-		after(async () => {
+		afterEach(async () => {
 			if (serverGrouping.isRunning) {
 				serverGrouping.closeServer();
 			}
@@ -472,6 +527,17 @@ describe('ServerGrouping', () => {
 			serverGrouping.closeServer();
 			open.restore();
 		});
+
+        it("retains concurrent opens while the server starts", async () => {
+            const files = ['a.html', 'b.html', 'a.html'].map(name => vscode.Uri.joinPath(testWorkspaces[0].uri, name));
+            const seen: string[] = [];
+            const listener = serverGrouping.onShouldLaunchEmbeddedPreview(e => seen.push(e.uri!.toString()));
+            await Promise.all(files.map(file => serverGrouping.createOrShowEmbeddedPreview(undefined, file)));
+            for (let i=0; i<100 && seen.length<3; i++) { await new Promise(r => setTimeout(r, 10)); }
+            assert.deepStrictEqual(seen, files.map(f => f.toString()));
+            listener.dispose();
+            serverGrouping.closeServer();
+        });
 
 		it("starts the server with showPreviewInExternalBrowser", async () => {
 			const openSpy = sandbox.spy(serverGrouping, "openServer");

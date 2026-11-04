@@ -1,0 +1,7 @@
+{
+    "htmlMultiPreview.portNumber": 43120,
+    "workbench.editorAssociations": {
+        "*.html": "htmlMultiPreview.rendered"
+    },
+    "htmlMultiPreview.autoRefreshPreview": "Never"
+}

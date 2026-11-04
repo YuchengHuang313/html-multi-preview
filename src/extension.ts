@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { TelemetryReporter } from '@vscode/extension-telemetry';
+import { TelemetryReporter } from './utils/telemetry';
 import { EXTENSION_ID } from './utils/constants';
 import { PathUtil } from './utils/pathUtil';
 import {
@@ -14,6 +14,7 @@ import {
 	SettingUtil,
 } from './utils/settingsUtil';
 import { IOpenFileOptions, Manager } from './manager';
+import { showRenderedPreview } from './editorPreview/renderedEditor';
 
 let reporter: TelemetryReporter;
 let serverPreview: Manager;
@@ -40,6 +41,17 @@ export function activate(context: vscode.ExtensionContext): void {
 	);
 
 	context.subscriptions.push(reporter);
+
+    context.subscriptions.push(vscode.window.registerCustomEditorProvider(
+        'htmlMultiPreview.rendered',
+        { resolveCustomTextEditor: (document: vscode.TextDocument, panel: vscode.WebviewPanel) =>
+            serverPreview.resolveRenderedEditor(document.uri, panel) },
+        { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false }
+    ));
+    context.subscriptions.push(vscode.commands.registerCommand(
+        'htmlMultiPreview.showNewPreview', showRenderedPreview
+    ));
+
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(`${SETTINGS_SECTION_ID}.start`, async () => {

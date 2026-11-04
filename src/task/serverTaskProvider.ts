@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { TelemetryReporter } from '@vscode/extension-telemetry';
+import { TelemetryReporter } from '../utils/telemetry';
 import { EndpointManager } from '../infoManagers/endpointManager';
 import { Disposable } from '../utils/dispose';
 import { serverTaskLinkProvider } from './serverTaskLinkProvider';
@@ -33,7 +33,7 @@ export enum ServerStartedStatus {
 export class ServerTaskProvider
 	extends Disposable
 	implements vscode.TaskProvider {
-	public static CustomBuildScriptType = 'Live Preview';
+	public static CustomBuildScriptType = 'HTML Multi Preview';
 	private _tasks: vscode.Task[] | undefined;
 	private _terminals: Map<string | undefined, ServerTaskTerminal>;
 	private _terminalLinkProvider: serverTaskLinkProvider;

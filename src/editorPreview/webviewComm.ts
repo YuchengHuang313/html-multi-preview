@@ -11,6 +11,7 @@ import { NavEditCommands, PageHistory } from './pageHistoryTracker';
 import { isFileInjectable } from '../utils/utils';
 import { Connection } from '../connectionInfo/connection';
 import { randomBytes } from 'crypto';
+import { AutoRefreshPreview, SettingUtil } from '../utils/settingsUtil';
 
 /**
  * @description the object responsible for communicating messages to the webview.
@@ -39,7 +40,8 @@ export class WebviewComm extends Disposable {
 
 		this._register(
 			this._connectionManager.onConnected((e) => {
-				if (e.workspace === this.currentConnection?.workspace) {
+				if (e.workspace === this.currentConnection?.workspace
+                    && SettingUtil.GetConfig().autoRefreshPreview !== AutoRefreshPreview.never) {
 					this.reloadWebview();
 				}
 			})
@@ -111,6 +113,7 @@ export class WebviewComm extends Disposable {
 		updateHistory = true,
 		connection: Connection = this.currentConnection
 	): Promise<void> {
+		if (this.isDisposed) { return; }
 		await this._setHtml(this._panel.webview, URLExt, updateHistory, connection);
 		this.currentAddress = URLExt;
 	}
@@ -131,6 +134,7 @@ export class WebviewComm extends Disposable {
 		const httpHost = await this.resolveHost(connection);
 		const url = await this.constructAddress(URLExt, connection, httpHost);
 		const wsURI = await this._resolveWsHost(connection);
+		if (this.isDisposed) { return; }
 		this._panel.webview.html = this._getHtmlForWebview(
 			webview,
 			url,

@@ -6,7 +6,7 @@
 import { Disposable } from './utils/dispose';
 import * as vscode from 'vscode';
 import { PathUtil } from './utils/pathUtil';
-import { TelemetryReporter } from '@vscode/extension-telemetry';
+import { TelemetryReporter } from './utils/telemetry';
 import { ConnectionManager } from './connectionInfo/connectionManager';
 import { BrowserPreview } from './editorPreview/browserPreview';
 import { PreviewType, SettingUtil } from './utils/settingsUtil';
@@ -345,6 +345,16 @@ export class Manager extends Disposable {
 		}
 	}
 
+	public async resolveRenderedEditor(file: vscode.Uri, panel: vscode.WebviewPanel): Promise<void> {
+        let closed = false;
+        const subscription = panel.onDidDispose(() => { closed = true; subscription.dispose(); });
+        panel.webview.options = this._previewManager.getWebviewOptions();
+        const workspace = await PathUtil.GetWorkspaceFromURI(file);
+        const grouping = await this._getServerGroupingFromWorkspace(workspace);
+        if (closed) { return; }
+        await grouping.createOrShowEmbeddedPreview(panel, file);
+    }
+
 	public async openPreviewAtFileUri(
 		file?: vscode.Uri,
 		options?: IOpenFileOptions,
@@ -605,13 +615,7 @@ export class Manager extends Disposable {
 
 			this._register(
 				serverGrouping.onClose(() => {
-					if (
-						this._previewManager.currentPanel &&
-						this._previewManager.currentPanel.currentConnection === connection
-					) {
-						// close the preview if it is showing this server's content
-						this._previewManager.currentPanel?.close();
-					}
+					this._previewManager.closeConnection(connection);
 
 					this._statusBar.removeServer(workspace?.uri);
 					this._serverGroupings.delete(workspace?.uri.toString());

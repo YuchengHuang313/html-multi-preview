@@ -7,3 +7,8 @@ media/codicon*
 media/extension*
 .devcontainer/*
 .DS_Store
+
+# Local logs, caches, and temporary profiles
+.local/
+# Keep the current cross-device installer in the repository.
+!dist/html-multi-preview-1.2.2.vsix

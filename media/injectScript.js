@@ -336,3 +336,90 @@ function reloadPage() {
 	if (block) return;
 	window.location.reload();
 }
+
+// Image actions run in the client renderer, so Remote-SSH copies to the user's
+// desktop clipboard rather than the remote server's clipboard.
+(() => {
+    let menu;
+    const closeMenu = () => { menu?.remove(); menu = undefined; };
+    document.addEventListener('pointerdown', event => {
+        if (menu && !event.composedPath().includes(menu)) { closeMenu(); }
+    }, true);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { closeMenu(); }
+    }, true);
+    window.addEventListener('scroll', closeMenu, true);
+    document.addEventListener('contextmenu', event => {
+        closeMenu();
+        const target = event.composedPath().find(node =>
+            node instanceof HTMLImageElement || node instanceof HTMLCanvasElement);
+        if (!target) { return; }
+        event.preventDefault();
+        event.stopPropagation();
+        const host = document.createElement('div');
+        host.style.cssText = `position:fixed;z-index:2147483647;left:${Math.max(0, Math.min(event.clientX, innerWidth - 280))}px;top:${Math.max(0, Math.min(event.clientY, innerHeight - 90))}px;`;
+        const root = host.attachShadow({mode:'open'});
+        const style = document.createElement('style');
+        style.textContent = ':host{font:13px system-ui;color:#eee}div{width:260px;background:#252526;border:1px solid #555;border-radius:6px;padding:5px;box-shadow:0 4px 16px #0006}button{display:block;width:100%;border:0;border-radius:3px;padding:9px;text-align:left;color:inherit;background:transparent;font:inherit;cursor:pointer}button:hover,button:focus{background:#094771;outline:none}small{display:block;padding:4px 9px;color:#aaa}';
+        const box = document.createElement('div');
+        box.setAttribute('role','menu');
+        const button = document.createElement('button');
+        button.textContent = '复制图片 / Copy Image';
+        button.setAttribute('role','menuitem');
+        const status = document.createElement('small');
+        status.textContent = 'HTML Multi Preview';
+        status.setAttribute('role','status');
+        box.append(button, status);
+        root.append(style, box);
+        document.documentElement.append(host);
+        menu = host;
+        button.focus({preventScroll:true});
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            try {
+                if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+                    throw new Error('当前预览环境不支持图片剪贴板');
+                }
+                // Start the clipboard write during the click gesture. PNG encoding
+                // resolves asynchronously without losing user activation.
+                const png = (async () => {
+                    if (target instanceof HTMLImageElement) { await target.decode(); }
+                    const width = target instanceof HTMLImageElement ? target.naturalWidth : target.width;
+                    const height = target instanceof HTMLImageElement ? target.naturalHeight : target.height;
+                    if (!width || !height) { throw new Error('图片尚未加载'); }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvas.getContext('2d').drawImage(target, 0, 0, width, height);
+                    return new Promise((resolve, reject) => canvas.toBlob(
+                        blob => blob ? resolve(blob) : reject(new Error('图片转换失败')), 'image/png'));
+                })();
+                if (window.parent === window) {
+                    await navigator.clipboard.write([new ClipboardItem({'image/png': png})]);
+                } else {
+                    const blob = await png;
+                    await new Promise((resolve, reject) => {
+                        const id = crypto.randomUUID();
+                        const cleanup = () => { clearTimeout(timer); window.removeEventListener('message', receive); };
+                        const receive = event => {
+                            if (event.source !== window.parent || event.data?.command !== 'html-multi-preview-copy-result' || event.data.id !== id) { return; }
+                            cleanup();
+                            event.data.error ? reject(new Error(event.data.error)) : resolve();
+                        };
+                        const timer = setTimeout(() => { cleanup(); reject(new Error('剪贴板操作超时')); }, 10000);
+                        window.addEventListener('message', receive);
+                        window.parent.postMessage({command:'html-multi-preview-copy-image', id, png:blob}, '*');
+                    });
+                }
+                button.textContent = '已复制图片 / Image copied';
+                status.textContent = '可以直接粘贴到聊天或文档';
+                setTimeout(() => { if (menu === host) { closeMenu(); } }, 1600);
+            } catch (error) {
+                button.disabled = false;
+                status.textContent = '复制失败：' + (error.name === 'SecurityError'
+                    ? '跨域图片不允许读取像素，请先在浏览器中打开图片'
+                    : error.message);
+            }
+        });
+    }, true);
+})();

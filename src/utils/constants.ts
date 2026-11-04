@@ -20,7 +20,7 @@ export const OPEN_EXTERNALLY: vscode.MessageItem = {
 
 export const DEFAULT_HOST = '127.0.0.1';
 
-export const EXTENSION_ID = 'ms-vscode.live-server';
+export const EXTENSION_ID = 'yhuang546.html-multi-preview';
 
 export const OUTPUT_CHANNEL_NAME = vscode.l10n.t('Embedded Live Preview Console');
 
@@ -33,7 +33,7 @@ export const UriSchemes: any = {
 	untitled: 'untitled',
 };
 
-export const LIVE_PREVIEW_SERVER_ON = 'LivePreviewServerOn';
+export const LIVE_PREVIEW_SERVER_ON = 'HtmlMultiPreviewServerOn';
 
 export const TASK_TERMINAL_BASE_NAME = vscode.l10n.t('Run Server');
 

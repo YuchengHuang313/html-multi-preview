@@ -9,7 +9,7 @@ import { PreviewManager } from '../../editorPreview/previewManager';
 import { MockTelemetryReporter } from './mocks/mockTelemetryReporter';
 import { ConnectionManager } from '../../connectionInfo/connectionManager';
 import { EndpointManager } from '../../infoManagers/endpointManager';
-import { CustomExternalBrowser, SettingUtil } from '../../utils/settingsUtil';
+import { AutoRefreshPreview, CustomExternalBrowser, SettingUtil } from '../../utils/settingsUtil';
 import { makeSetting, testWorkspaces } from './common';
 import { Connection } from '../../connectionInfo/connection';
 import { WebviewComm } from '../../editorPreview/webviewComm';
@@ -66,15 +66,48 @@ describe('PreviewManager', () => {
 		await previewManager.launchFileInEmbeddedPreview(undefined, connection,
 			vscode.Uri.joinPath(testWorkspaces[0].uri, "/page.html"));
 
-		assert(previewManager.currentPanel?.panel === initialPanel); // ensure that the same panel was used the entire time
+		assert(previewManager.currentPanel?.panel !== initialPanel); // Each open has its own panel.
+        const newest = previewManager.currentPanel;
+        initialPanel?.dispose();
+        assert(previewManager.previewActive);
+        assert.strictEqual(previewManager.currentPanel, newest);
 		assert.ok(goToFile.callCount === 4);
 		assert(previewManager.previewActive);
 
 		assert.ok(goToFile.getCall(0).calledWith('', false));
-		assert.ok(goToFile.getCall(1).calledWith('/index.html', true));
-		assert.ok(goToFile.getCall(2).calledWith('/index.html', true));
-		assert.ok(goToFile.getCall(3).calledWith('/page.html', true));
+		assert.ok(goToFile.getCall(1).calledWith('/index.html', false));
+		assert.ok(goToFile.getCall(2).calledWith('/index.html', false));
+		assert.ok(goToFile.getCall(3).calledWith('/page.html', false));
 	});
+
+    it("closing the server closes all of its tabs", () => {
+        previewManager.closeConnection(connection);
+        assert.strictEqual(previewManager.currentPanel, undefined);
+        assert.strictEqual(previewManager.previewActive, false);
+    });
+
+    it("window identity messages do not reload a loaded preview", async () => {
+        await previewManager.launchFileInEmbeddedPreview(undefined, connection, vscode.Uri.joinPath(testWorkspaces[0].uri, "/index.html"));
+        const reload = sinon.spy(WebviewComm.prototype, 'reloadWebview');
+        try {
+            const preview = previewManager.currentPanel!;
+            await (preview as any)._handleWebviewMessage({command:'get-window-id', id:'test-window'});
+            await (preview as any)._handleWebviewMessage({command:'get-window-id', id:'test-window'});
+            assert.equal(reload.callCount, 0);
+        } finally { reload.restore(); }
+    });
+
+    it("connection notifications respect Never without resetting the page", async () => {
+        (SettingUtil.GetConfig as sinon.SinonStub).returns(makeSetting({autoRefreshPreview: AutoRefreshPreview.never}));
+        const reload = sinon.spy(WebviewComm.prototype, 'reloadWebview');
+        try {
+            await connection.connected();
+            assert.equal(reload.callCount, 0);
+        } finally {
+            reload.restore();
+            (SettingUtil.GetConfig as sinon.SinonStub).returns(makeSetting({}));
+        }
+    });
 
 	it("previews in external preview (non-debug)", async () => {
 		const openInBrowser = sinon.stub(ExternalBrowserUtils, 'openInBrowser');

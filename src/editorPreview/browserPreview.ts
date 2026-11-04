@@ -7,7 +7,7 @@ import { OPEN_EXTERNALLY } from '../utils/constants';
 import * as vscode from 'vscode';
 import { Disposable } from '../utils/dispose';
 import { PathUtil } from '../utils/pathUtil';
-import { TelemetryReporter } from '@vscode/extension-telemetry';
+import { TelemetryReporter } from '../utils/telemetry';
 import { ConnectionManager } from '../connectionInfo/connectionManager';
 import { WebviewComm } from './webviewComm';
 import { FormatDateTime } from '../utils/utils';
@@ -22,14 +22,13 @@ import { ExternalBrowserUtils } from '../utils/externalBrowserUtils';
  * @description the embedded preview object, containing the webview panel showing the preview.
  */
 export class BrowserPreview extends Disposable {
-	public static readonly viewType = 'browserPreview';
+	public static readonly viewType = 'htmlMultiPreview.browserPreview';
 	private readonly _webviewComm: WebviewComm;
 	private readonly _onDisposeEmitter = this._register(
 		new vscode.EventEmitter<void>()
 	);
 	public readonly onDispose = this._onDisposeEmitter.event;
 
-	private windowId: number | undefined = undefined;
 
 	private readonly _onShouldLaunchPreview = this._register(
 		new vscode.EventEmitter<{
@@ -187,18 +186,7 @@ export class BrowserPreview extends Disposable {
 					'workbench.action.webview.openDeveloperTools'
 				);
 				return;
-			case 'get-window-id':
-				this.windowId = message.id;
-				if (this.windowId) {
-					const currentFullAddress = await this.currentConnection.resolveExternalHTTPUri();
-					const url = new URL(this.currentAddress, currentFullAddress.toString(true));
-					if (!url.searchParams.has('serverWindowId')) {
-						url.searchParams.set('serverWindowId', this.windowId.toString());
-						this._webviewComm.currentAddress = url.pathname + url.search;
-						this._webviewComm.reloadWebview();
-					}
-				}
-				return;
+
 		}
 	}
 
@@ -218,7 +206,11 @@ export class BrowserPreview extends Disposable {
 		}
 	}
 
+	private _closing = false;
+
 	dispose(): void {
+		if (this._closing) { return; }
+		this._closing = true;
 		this._onDisposeEmitter.fire();
 		this._panel.dispose();
 		super.dispose();

@@ -27,7 +27,7 @@ export class UpdateListener extends Disposable {
 
 	constructor(_userDataDir: string | undefined) {
 		super();
-		this._watcher = vscode.workspace.createFileSystemWatcher('**');
+		this._watcher = this._register(vscode.workspace.createFileSystemWatcher('**'));
 
 		const notUserDataDirChange = function (file: vscode.Uri): boolean {
 			return (
@@ -107,6 +107,7 @@ export class UpdateListener extends Disposable {
 			vscode.workspace.onDidChangeConfiguration((e) => {
 				this._debounceDelay =
 					SettingUtil.GetConfig().previewDebounceDelay;
+                if (!this._autoRefreshEnabled) { clearTimeout(this._debounceTimer); }
 			})
 		);
 	}
@@ -140,8 +141,20 @@ export class UpdateListener extends Disposable {
 		}
 	}
 
-	private _refreshPreview(): void {
-		clearTimeout(this._debounceTimer);
-		this._debounceTimer = setTimeout(() => { this._shouldRefreshPreviews.fire(); }, this._debounceDelay);
-	}
+    private get _autoRefreshEnabled(): boolean {
+        return !this.isDisposed && SettingUtil.GetConfig().autoRefreshPreview !== AutoRefreshPreview.never;
+    }
+
+    private _refreshPreview(): void {
+        clearTimeout(this._debounceTimer);
+        if (!this._autoRefreshEnabled) { return; }
+        this._debounceTimer = setTimeout(() => {
+            if (this._autoRefreshEnabled) { this._shouldRefreshPreviews.fire(); }
+        }, this._debounceDelay);
+    }
+
+    public override dispose(): void {
+        clearTimeout(this._debounceTimer);
+        super.dispose();
+    }
 }

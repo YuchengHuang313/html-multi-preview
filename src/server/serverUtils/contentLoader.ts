@@ -15,7 +15,7 @@ import {
 	isFileInjectable,
 } from '../../utils/utils';
 import { HTMLInjector } from './HTMLInjector';
-import { TelemetryReporter } from '@vscode/extension-telemetry';
+import { TelemetryReporter } from '../../utils/telemetry';
 import { EndpointManager } from '../../infoManagers/endpointManager';
 import { PathUtil } from '../../utils/pathUtil';
 import { INJECTED_ENDPOINT_NAME } from '../../utils/constants';
@@ -305,10 +305,10 @@ export class ContentLoader extends Disposable {
 		let contentLength = 0;
 
 		while (i < workspaceDocuments.length) {
-			if (PathUtil.PathEquals(readPath, workspaceDocuments[i].fileName)) {
-				if (inFilesystem && workspaceDocuments[i].isUntitled) {
-					continue;
-				}
+			// Generated reports can change on disk while a clean editor buffer stays stale.
+			// Keep live unsaved edits, but read saved files from disk on every request.
+			const useBuffer = !inFilesystem || (workspaceDocuments[i].isDirty && !workspaceDocuments[i].isUntitled);
+			if (useBuffer && PathUtil.PathEquals(readPath, workspaceDocuments[i].fileName)) {
 				let fileContents = workspaceDocuments[i].getText();
 
 				if (workspaceDocuments[i].languageId == 'html') {

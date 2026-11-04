@@ -6,13 +6,12 @@
 import { Disposable } from '../utils/dispose';
 import * as vscode from 'vscode';
 import { Settings, SettingUtil } from '../utils/settingsUtil';
-import { INTEGRATED_BROWSER_COMMAND } from '../utils/constants';
 import {
 	DONT_SHOW_AGAIN,
 	INIT_PANEL_TITLE,
 	OUTPUT_CHANNEL_NAME,
 } from '../utils/constants';
-import { TelemetryReporter } from '@vscode/extension-telemetry';
+import { TelemetryReporter } from '../utils/telemetry';
 import { ConnectionManager } from '../connectionInfo/connectionManager';
 import { PathUtil } from '../utils/pathUtil';
 import { BrowserPreview } from './browserPreview';
@@ -28,6 +27,8 @@ export class PreviewManager extends Disposable {
 	private readonly _outputChannel: vscode.OutputChannel;
 	public previewActive = false;
 	public currentPanel: BrowserPreview | undefined;
+	private readonly _panels = new Set<BrowserPreview>();
+    private _shuttingDown = false;
 	private _notifiedAboutLooseFiles = false;
 	private _currentTimeout: NodeJS.Timeout | undefined;
 
@@ -65,33 +66,12 @@ export class PreviewManager extends Disposable {
 	): Promise<void> {
 		const path = file ? await this._fileUriToPath(file, connection) : '/';
 
-		// Check if we should use the integrated browser instead
-		if (await SettingUtil.shouldUseIntegratedBrowser()) {
-			const url = `http://${connection.host}:${connection.httpPort}${path}?vscode-livepreview=true`;
-			await vscode.commands.executeCommand(INTEGRATED_BROWSER_COMMAND, {
-				url,
-				openToSide: true,
-				reuseUrlFilter: '**?vscode-livepreview=true'
-			});
-			return;
-		}
-
-		// If we already have a panel, show it.
-		if (this.currentPanel) {
-			await this.currentPanel.reveal(
-				vscode.ViewColumn.Beside,
-				path,
-				connection
-			);
-			return;
-		}
-
+		// Each explicit open gets a new panel; restored panels keep their identity.
 		if (!panel) {
-			// Otherwise, create a new panel.
 			panel = vscode.window.createWebviewPanel(
 				BrowserPreview.viewType,
 				INIT_PANEL_TITLE,
-				vscode.ViewColumn.Beside,
+				vscode.ViewColumn.Active,
 				{
 					...this.getWebviewOptions(),
 					...this._getWebviewPanelOptions(),
@@ -212,7 +192,7 @@ export class PreviewManager extends Disposable {
 			clearTimeout(this._currentTimeout);
 		}
 
-		this.currentPanel = this._register(
+		const preview = this._register(
 			new BrowserPreview(
 				file,
 				connection,
@@ -224,28 +204,49 @@ export class PreviewManager extends Disposable {
 			)
 		);
 
-		const listener = this.currentPanel.onShouldLaunchPreview((e) =>
+		this._panels.add(preview);
+        this.currentPanel = preview;
+        const focusListener = panel.onDidChangeViewState(() => {
+            if (panel.active) { this.currentPanel = preview; }
+        });
+        const listener = preview.onShouldLaunchPreview((e) =>
 			this._onShouldLaunchPreview.fire(e)
 		);
 
 		this.previewActive = true;
 
-		this._register(
-			this.currentPanel.onDispose(() => {
-				this.currentPanel = undefined;
-				const closeServerDelay =
-					SettingUtil.GetConfig().serverKeepAliveAfterEmbeddedPreviewClose;
-				if (closeServerDelay !== 0) {
-					this._currentTimeout = setTimeout(() => {
-						this._serverExpired();
+        this._register(preview.onDispose(() => {
+            this._panels.delete(preview);
+            if (this.currentPanel === preview) {
+                this.currentPanel = [...this._panels].at(-1);
+            }
+            this.previewActive = this._panels.size > 0;
+            listener.dispose();
+            focusListener.dispose();
+            if (this.previewActive || this._shuttingDown) { return; }
+            const delay = SettingUtil.GetConfig().serverKeepAliveAfterEmbeddedPreviewClose;
+            if (delay !== 0) {
+                this._currentTimeout = setTimeout(() => {
+                    if (this._panels.size === 0) { this._serverExpired(); }
+                }, Math.floor(delay * 1000 * 60));
+            }
+        }));
+    }
 
-						this.previewActive = false;
-					}, Math.floor(closeServerDelay * 1000 * 60));
-				}
-				listener.dispose();
-			})
-		);
-	}
+    public override dispose(): void {
+        this._shuttingDown = true;
+        if (this._currentTimeout) { clearTimeout(this._currentTimeout); }
+        super.dispose();
+        this._outputChannel.dispose();
+    }
+
+    /** Closing a workspace server closes only its own preview tabs. */
+    public closeConnection(connection: Connection): void {
+        for (const preview of [...this._panels]) {
+            if (preview.currentConnection === connection) { preview.close(); }
+        }
+    }
+
 	/**
 	 * @returns {vscode.WebviewPanelOptions} the webview panel options to allow it to always retain context.
 	 */

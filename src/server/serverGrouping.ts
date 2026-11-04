@@ -13,7 +13,7 @@ import {
 	Settings,
 } from '../utils/settingsUtil';
 import { DONT_SHOW_AGAIN } from '../utils/constants';
-import { TelemetryReporter } from '@vscode/extension-telemetry';
+import { TelemetryReporter } from '../utils/telemetry';
 import { EndpointManager } from '../infoManagers/endpointManager';
 import { Connection } from '../connectionInfo/connection';
 import {
@@ -54,7 +54,7 @@ interface IEmbeddedPreviewArgs {
 }
 
 export class ServerGrouping extends Disposable {
-	private _pendingLaunchInfo: ILaunchInfo | undefined;
+	private readonly _pendingLaunches: ILaunchInfo[] = [];
 	private readonly _httpServer: HttpServer;
 	private readonly _wsServer: WSServer;
 	private _isServerOn = false;
@@ -115,22 +115,21 @@ export class ServerGrouping extends Disposable {
 				this._connection.workspace
 			);
 
-			if (this._pendingLaunchInfo) {
-				if (this._pendingLaunchInfo.external) {
+			for (const launch of this._pendingLaunches.splice(0)) {
+				if (launch.external) {
 					this._onShouldLaunchExternalPreview.fire({
-						uri: this._pendingLaunchInfo.uri,
-						debug: this._pendingLaunchInfo.debug,
+						uri: launch.uri,
+						debug: launch.debug,
 						connection: this._connection,
 					});
 				} else {
 					this._onShouldLaunchEmbeddedPreview.fire({
-						uri: this._pendingLaunchInfo.uri,
-						panel: this._pendingLaunchInfo.panel,
+						uri: launch.uri,
+						panel: launch.panel,
 						connection: this._connection,
 					});
 				}
 
-				this._pendingLaunchInfo = undefined;
 			}
 		});
 	}
@@ -216,12 +215,12 @@ export class ServerGrouping extends Disposable {
 		if (!this._serverTaskProvider.isTaskRunning(this._connection.workspace)) {
 			if (!this.isRunning) {
 				// set the pending launch info, which will trigger once the server starts in `launchFileInExternalPreview`
-				this._pendingLaunchInfo = {
+				this._pendingLaunches.push({
 					external: true,
 					uri: file,
 					debug: debug,
 					connection: this._connection,
-				};
+				});
 			} else {
 				this._onShouldLaunchExternalPreview.fire({
 					uri: file,
@@ -262,13 +261,13 @@ export class ServerGrouping extends Disposable {
 	): Promise<void> {
 		if (!this.isRunning) {
 			// set the pending launch info, which will trigger once the server starts in `launchFileInEmbeddedPreview`
-			this._pendingLaunchInfo = {
+			this._pendingLaunches.push({
 				external: false,
 				panel: panel,
 				uri: file,
 				debug: debug,
 				connection: this._connection,
-			};
+			});
 			await this.openServer();
 		} else {
 			this._onShouldLaunchEmbeddedPreview.fire({

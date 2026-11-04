@@ -30,7 +30,6 @@
 	 * @description run on load.
 	 */
 	function onLoad() {
-		getWindowId();
 		for (const groupClassName in navGroups) {
 			const leftRight = navGroups[groupClassName];
 			handleNavGroup(getNavGroupElems(groupClassName), leftRight);
@@ -141,16 +140,7 @@
 		});
 	}
 
-	function getWindowId() {
-		const existing = new URLSearchParams(location.search);
-		const windowId = existing.get('id');
-		if (windowId) {
-			vscode.postMessage({
-				command: 'get-window-id',
-				id: windowId,
-			});
-		}
-	}
+
 
 	/**
 	 * @param {any} event the event processed
@@ -530,3 +520,17 @@
 		window.dispatchEvent(emulatedKeyboardEvent);
 	}
 })();
+
+// The trusted webview owns clipboard permissions; the nested HTTP report does not.
+window.addEventListener('message', async event => {
+    const frame = document.getElementById('hostedContent');
+    const message = event.data;
+    if (event.source !== frame?.contentWindow || message?.command !== 'html-multi-preview-copy-image') { return; }
+    if (!(message.png instanceof Blob) || message.png.type !== 'image/png') { return; }
+    let error;
+    try {
+        window.focus();
+        await navigator.clipboard.write([new ClipboardItem({'image/png': message.png})]);
+    } catch (failure) { error = failure.message; }
+    event.source.postMessage({command:'html-multi-preview-copy-result', id:message.id, error}, event.origin);
+});
