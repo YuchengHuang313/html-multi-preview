@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) YuchengHuang313. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import * as vscode from 'vscode';
 
 const viewType = 'htmlMultiPreview.rendered';
@@ -14,7 +19,7 @@ export function showRenderedPreview(file?: vscode.Uri): Promise<void> {
 	const inFlight = pending.get(key);
 	if (inFlight) { return inFlight; }
 	const source = input instanceof vscode.TabInputText && input.uri.toString() === key ? active : undefined;
-	const operation = (async () => {
+	const operation = (async (): Promise<void> => {
 		const existing = vscode.window.tabGroups.all.find(group => group.tabs.some(tab =>
 			tab.input instanceof vscode.TabInputCustom && tab.input.viewType === viewType &&
 			tab.input.uri.toString() === key));

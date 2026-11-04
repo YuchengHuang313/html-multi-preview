@@ -220,7 +220,7 @@ describe('ServerGrouping', () => {
             const documents = sandbox.stub(vscode.workspace, 'textDocuments').value([{
                 fileName: 'c:/Users/TestUser/workspace1/test/index.html',
                 languageId: 'html', isUntitled: false, isDirty: false,
-                getText: () => '<html><body>Extracted: 99</body></html>',
+                getText: (): string => '<html><body>Extracted: 99</body></html>',
             }]);
             try {
                 const body = await requestReport();
@@ -233,7 +233,7 @@ describe('ServerGrouping', () => {
             const documents = sandbox.stub(vscode.workspace, 'textDocuments').value([{
                 fileName: 'c:/Users/TestUser/workspace1/test/index.html',
                 languageId: 'html', isUntitled: false, isDirty: true,
-                getText: () => '<html><body>Unsaved edits</body></html>',
+                getText: (): string => '<html><body>Unsaved edits</body></html>',
             }]);
             try {
                 const body = await requestReport();
@@ -246,7 +246,7 @@ describe('ServerGrouping', () => {
             const documents = sandbox.stub(vscode.workspace, 'textDocuments').value([{
                 fileName: 'c:/Users/TestUser/workspace1/test/index.html',
                 languageId: 'html', isUntitled: false, isDirty: false,
-                getText: () => '<html><body>Extracted: 99</body></html>',
+                getText: (): string => '<html><body>Extracted: 99</body></html>',
             }]);
             const read = PathUtil.FileRead as sinon.SinonStub;
             try {
