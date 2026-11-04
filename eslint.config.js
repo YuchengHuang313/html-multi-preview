@@ -34,4 +34,18 @@ module.exports = tseslint.config(
 			],
 		},
 	},
+	{
+		// Fork-authored files retain their own attribution; upstream headers stay intact.
+		files: ['src/editorPreview/renderedEditor.ts', 'src/test/suite/refresh.test.ts', 'src/utils/telemetry.ts'],
+		rules: {
+			'headers/header-format': [2, {
+				source: 'string',
+				style: 'jsdoc',
+				content: 'Copyright (c) YuchengHuang313. All rights reserved.\nLicensed under the MIT License. See LICENSE in the project root for license information.',
+				blockPrefix: '---------------------------------------------------------------------------------------------\n',
+				linePrefix: ' *  ',
+				blockSuffix: '\n *--------------------------------------------------------------------------------------------',
+			}],
+		},
+	},
 );
